@@ -5,6 +5,7 @@ import { signupSchema, type SignupFormValues } from "~/schemas/auth";
 import { db } from "~/server/db";
 import Stripe from "stripe";
 import { env } from "~/env";
+import { v4 as uuidv4 } from "uuid";
 
 type SignupResult = {
   success: boolean;
@@ -34,7 +35,9 @@ export async function signUp(data: SignupFormValues): Promise<SignupResult> {
 
     const hashedPassword = await hashPassword(password);
 
-    let stripeCustomerId = "dev_customer_id";
+    // Generate a unique placeholder by default to prevent unique constraint violations
+    // This allows developer to test signup without a valid Stripe key
+    let stripeCustomerId = `dev_cus_${uuidv4()}`;
 
     if (env.STRIPE_SECRET_KEY && !env.STRIPE_SECRET_KEY.includes("placeholder")) {
       try {
@@ -44,7 +47,8 @@ export async function signUp(data: SignupFormValues): Promise<SignupResult> {
         });
         stripeCustomerId = stripeCustomer.id;
       } catch (e) {
-        console.warn("Failed to create Stripe customer, using placeholder", e);
+        console.warn("Failed to create Stripe customer, using unique placeholder", e);
+        // stripeCustomerId is already set to a unique dev ID above
       }
     }
 
@@ -58,6 +62,7 @@ export async function signUp(data: SignupFormValues): Promise<SignupResult> {
 
     return { success: true };
   } catch (error) {
-    return { success: false, error: "An error occured during signup" };
+    console.error("Signup error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "An error occurred during signup" };
   }
 }

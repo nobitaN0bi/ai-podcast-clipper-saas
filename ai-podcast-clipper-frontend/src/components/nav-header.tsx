@@ -18,13 +18,12 @@ import { toast } from "sonner";
 
 const NavHeader = ({ credits, email }: { credits: number; email: string }) => {
   return (
-    <header className="bg-background sticky top-0 z-10 flex justify-center border-b">
+    <header className="fixed top-0 w-full z-50 flex justify-center border-b shadow-sm bg-white dark:bg-zinc-950">
       <div className="container flex h-16 items-center justify-between px-4 py-2">
         <Link href="/dashboard" className="flex items-center">
-          <div className="font-sans text-xl font-medium tracking-tight">
-            <span className="text-foreground">podcast</span>
-            <span className="font-light text-gray-500">/</span>
-            <span className="text-foreground font-light">clipper</span>
+          <div className="font-sans text-xl font-semibold tracking-tight">
+            <span className="text-primary">Clip</span>
+            <span className="text-foreground">Flow</span>
           </div>
         </Link>
 

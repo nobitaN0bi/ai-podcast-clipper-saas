@@ -1,20 +1,32 @@
-tqdm
-torch
+# torch - let whisperx resolve
 opencv-python
 ffmpegcv
+omegaconf
 numpy
 python_speech_features
 scipy
 scenedetect
 scikit-learn
 gdown
-torchvision
+# torchvision - let whisperx resolve
 pandas
 transformers
-accelerate
+# accelerate - let whisperx resolve
 datasets
 google-genai
 pysubs2
 boto3
 fastapi[standard]
-whisperx
+# whisperx moved to main.py image definition
+pydantic-settings
+python-dotenv
+modal
+langgraph
+langchain-openai
+# B-roll generation (Hunyuan Video)
+fal-client
+tenacity
+scikit-image
+
+polar-sdk
+pydantic-settings

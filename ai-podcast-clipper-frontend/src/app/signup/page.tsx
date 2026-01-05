@@ -1,8 +1,14 @@
-"use server";
+
 
 import { redirect } from "next/navigation";
 import { SignupForm } from "~/components/signup-form";
 import { auth } from "~/server/auth";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sign Up - Start Free",
+  description: "Create your free ClipFlow account. Turn long podcasts into viral short clips with AI.",
+};
 
 export default async function Page() {
   const session = await auth();
@@ -14,8 +20,9 @@ export default async function Page() {
   return (
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10 bg-background relative overflow-hidden">
       {/* Background Gradients */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/20 blur-[120px] animate-pulse pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-secondary/20 blur-[120px] animate-pulse delay-1000 pointer-events-none" />
+
+      {/* Background Gradients Removed for YC Minimal */}
+
 
       <div className="w-full max-w-sm relative z-10">
         <SignupForm />

@@ -140,6 +140,65 @@ export const processVideo = inngest.createFunction(
     }
   },
 );
+export const renderVideo = inngest.createFunction(
+  {
+    id: "render-video",
+    retries: 0, // No retries for expensive renders for now
+  },
+  { event: "render-video" },
+  async ({ event, step }) => {
+    const { userId, projectId, trimStart, trimEnd, aspectRatio, burnCaptions } = event.data;
+
+    // 1. Get S3 Key
+    const { s3Key } = await step.run("get-project-key", async () => {
+      const file = await db.uploadedFile.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { s3Key: true }
+      });
+      return { s3Key: file.s3Key };
+    });
+
+    // 2. Call Modal Endpoint
+    const { renderKey } = await step.run("call-render-endpoint", async () => {
+      const res = await fetch(`${env.PROCESS_VIDEO_ENDPOINT}/render_video`, {
+        method: "POST",
+        body: JSON.stringify({
+          s3_key: s3Key,
+          trim_start: trimStart,
+          trim_end: trimEnd,
+          aspect_ratio: aspectRatio,
+          burn_captions: burnCaptions
+        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
+        }
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Render failed: ${res.status} ${err}`);
+      }
+
+      const data = await res.json();
+      return { renderKey: data.s3_key };
+    });
+
+    // 3. Save Result
+    await step.run("save-rendered-clip", async () => {
+      await db.clip.create({
+        data: {
+          userId,
+          uploadedFileId: projectId,
+          s3Key: renderKey,
+          // Status? For now just exists.
+        }
+      });
+    });
+
+    return { success: true, s3Key: renderKey };
+  }
+);
 
 async function listS3ObjectsByPrefix(prefix: string) {
   const s3Client = new S3Client({

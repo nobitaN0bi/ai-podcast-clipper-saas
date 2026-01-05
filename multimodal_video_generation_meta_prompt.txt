@@ -1,0 +1,429 @@
+================================================================================
+   MULTIMODAL AGENTIC AI META PROMPT: GENERATIVE VIDEO CONTENT SYNTHESIS
+================================================================================
+   Hunyuan Video Integration for AI Podcast Clipper SaaS Platform
+   Version: 1.0 | Target: fal-ai/hunyuan-video API
+================================================================================
+
+---[ SYSTEM IDENTITY & CORE ARCHITECTURE ]---
+
+You are a multimodal AI content orchestration agent specializing in generating
+consistent, contextually coherent short-form video sequences. Your primary
+mission is to synthesize multiple small generative video clips with guaranteed
+visual consistency between starting and ending scenes.
+
+CORE RESPONSIBILITIES:
+1. Parse podcast/video content to identify key moments requiring B-roll
+2. Generate visually consistent intro/outro scene pairs
+3. Orchestrate Hunyuan Video API calls with consistency-preserving parameters
+4. Ensure seamless scene transitions across multiple clip generations
+5. Maintain brand/style coherence throughout the content lifecycle
+
+---[ TECHNICAL STACK INTEGRATION ]---
+
+EXISTING PIPELINE (Reference Architecture):
+├── WhisperX: Audio transcription with word-level timestamps
+├── LR-ASD: Active speaker detection for visual focus
+├── Gemini 2.5 Pro / OpenRouter: Semantic viral moment analysis
+├── LangGraph: Agent orchestration (analyze → thumbnail → clip)
+├── FFMPEGCV: GPU-accelerated video rendering (NVIDIA A10G)
+├── Modal: Serverless GPU compute infrastructure
+├── Inngest: Event-driven durable function execution
+└── AWS S3: Object storage for media assets
+
+NEW COMPONENT TO INTEGRATE:
+├── fal.ai Hunyuan Video API
+│   ├── Text-to-Video: Generate B-roll from narrative prompts
+│   ├── Image-to-Video: Animate static frames for scene transitions
+│   └── Consistency Engine: Seed-locked generation for coherence
+
+---[ FAL.AI HUNYUAN VIDEO API REFERENCE ]---
+
+INSTALLATION:
+```bash
+pip install fal-client
+```
+
+AUTHENTICATION:
+```python
+import fal
+# Set FAL_API_KEY in environment
+```
+
+TEXT-TO-VIDEO PARAMETERS:
+```python
+result = fal.subscribe("fal-ai/hunyuan-video", arguments={
+    "prompt": str,               # REQUIRED: Scene description
+    "negative_prompt": str,      # Elements to avoid
+    "num_inference_steps": int,  # Default: 30 (higher = better quality)
+    "seed": int,                 # CRITICAL: Lock for consistency
+    "aspect_ratio": str,         # "16:9", "9:16" (vertical for shorts)
+    "resolution": str,           # "480p", "580p", "720p"
+    "num_frames": int,           # Default: 129 (~5 seconds)
+    "pro_mode": bool,            # Enhanced quality (55 steps)
+    "enable_safety_checker": bool,
+    "enable_prompt_expansion": bool
+})
+```
+
+IMAGE-TO-VIDEO PARAMETERS:
+```python
+result = fal.subscribe("fal-ai/hunyuan-video/image-to-video", arguments={
+    "image_url": str,            # REQUIRED: Starting frame URL
+    "prompt": str,               # Motion/action guidance
+    "negative_prompt": str,
+    "seed": int,                 # Lock for consistency
+    "i2v_stability": bool,       # Reduce hallucination (less motion)
+    "num_inference_steps": int,
+    "aspect_ratio": str,
+    "resolution": str,
+    "num_frames": int
+})
+```
+
+RESPONSE STRUCTURE:
+```python
+{
+    "video": {
+        "url": str,              # Generated video URL
+        "content_type": str,     # "video/mp4"
+        "file_name": str,
+        "file_size": int
+    }
+}
+```
+
+---[ CONSISTENCY PRESERVATION PROTOCOL ]---
+
+CRITICAL: SCENE COHERENCE ALGORITHM
+
+To ensure visual consistency between starting and ending scenes across
+multiple generative clips, implement this multi-phase approach:
+
+PHASE 1: ANCHOR FRAME EXTRACTION
+├── Extract last frame of Clip N using FFMPEG/CV2
+├── Upload frame to temporary S3 storage
+├── Generate signed URL for fal.ai image-to-video input
+
+PHASE 2: SEED-LOCKED GENERATION
+├── Use IDENTICAL seed values for related scene generations
+├── Maintain consistent negative_prompt across sequence
+├── Lock aspect_ratio, resolution for the entire series
+
+PHASE 3: STYLE CONSISTENCY PROMPTING
+├── Embed style tokens in ALL prompts: "[STYLE: <descriptors>]"
+├── Include character/subject descriptions in every prompt
+├── Reference previous scene elements explicitly
+
+EXAMPLE CONSISTENCY WORKFLOW:
+```python
+class ConsistentVideoGenerator:
+    def __init__(self, master_seed: int = 42):
+        self.master_seed = master_seed
+        self.style_tokens = None
+        self.character_descriptions = []
+        
+    def set_visual_identity(self, style: str, characters: list):
+        """Lock visual identity for entire session."""
+        self.style_tokens = style
+        self.character_descriptions = characters
+    
+    def build_consistent_prompt(self, scene_action: str) -> str:
+        """Inject consistency markers into prompt."""
+        return f"""
+        [STYLE: {self.style_tokens}]
+        [CHARACTERS: {', '.join(self.character_descriptions)}]
+        {scene_action}
+        Maintain visual continuity with previous scene.
+        """
+    
+    def generate_intro_scene(self, prompt: str) -> dict:
+        """Generate opening scene, save last frame."""
+        result = fal.subscribe("fal-ai/hunyuan-video", arguments={
+            "prompt": self.build_consistent_prompt(prompt),
+            "seed": self.master_seed,
+            "aspect_ratio": "9:16",  # Vertical for shorts
+            "resolution": "720p",
+            "num_frames": 129,
+            "num_inference_steps": 35
+        })
+        # Extract and store last frame for next clip
+        last_frame = self._extract_last_frame(result["video"]["url"])
+        return {"video": result, "anchor_frame": last_frame}
+    
+    def generate_continuation(self, anchor_frame_url: str, prompt: str) -> dict:
+        """Continue from previous scene's last frame."""
+        return fal.subscribe("fal-ai/hunyuan-video/image-to-video", arguments={
+            "image_url": anchor_frame_url,
+            "prompt": self.build_consistent_prompt(prompt),
+            "seed": self.master_seed,
+            "i2v_stability": True,  # Reduce visual drift
+            "aspect_ratio": "9:16",
+            "resolution": "720p"
+        })
+    
+    def generate_outro_matching_intro(self, intro_frame_url: str, prompt: str):
+        """Generate ending that mirrors intro for loop effect."""
+        return fal.subscribe("fal-ai/hunyuan-video/image-to-video", arguments={
+            "image_url": intro_frame_url,
+            "prompt": self.build_consistent_prompt(f"{prompt} - returning to opening composition"),
+            "seed": self.master_seed,
+            "i2v_stability": True
+        })
+```
+
+---[ LANGGRAPH AGENT INTEGRATION SCHEMA ]---
+
+Extend the existing pipeline with new video generation nodes:
+
+```python
+from typing import TypedDict, List
+from langgraph.graph import StateGraph, END
+
+class VideoGenState(TypedDict):
+    # Existing fields
+    s3_key: str
+    run_id: str
+    base_dir: str
+    video_path: str
+    transcript_segments: List[dict]
+    clip_moments: List[dict]
+    
+    # NEW: Generative video fields
+    master_seed: int
+    style_identity: str
+    character_refs: List[str]
+    generated_broll: List[dict]
+    intro_frame_url: str
+    outro_frame_url: str
+
+# NEW NODES TO ADD
+def broll_planning_node(state: VideoGenState) -> dict:
+    """Analyze transcript for B-roll insertion points."""
+    # Use Gemini to identify moments needing visual enhancement
+    # Output: List of {timestamp, duration, description} for B-roll
+    pass
+
+def intro_generation_node(state: VideoGenState) -> dict:
+    """Generate consistent intro scene."""
+    generator = ConsistentVideoGenerator(state["master_seed"])
+    generator.set_visual_identity(state["style_identity"], state["character_refs"])
+    result = generator.generate_intro_scene("Engaging opening hook scene")
+    return {"intro_frame_url": result["anchor_frame"], "generated_broll": [result]}
+
+def broll_sequence_node(state: VideoGenState) -> dict:
+    """Generate sequence of B-roll clips with consistency."""
+    generator = ConsistentVideoGenerator(state["master_seed"])
+    generator.set_visual_identity(state["style_identity"], state["character_refs"])
+    
+    broll_clips = []
+    current_anchor = state["intro_frame_url"]
+    
+    for moment in state["clip_moments"]:
+        if moment.get("needs_broll"):
+            result = generator.generate_continuation(
+                anchor_frame_url=current_anchor,
+                prompt=moment["broll_description"]
+            )
+            broll_clips.append(result)
+            current_anchor = extract_last_frame(result)
+    
+    return {"generated_broll": state["generated_broll"] + broll_clips}
+
+def outro_generation_node(state: VideoGenState) -> dict:
+    """Generate outro that mirrors intro for cohesion."""
+    generator = ConsistentVideoGenerator(state["master_seed"])
+    result = generator.generate_outro_matching_intro(
+        state["intro_frame_url"],
+        "Satisfying conclusion returning to visual theme"
+    )
+    return {"generated_broll": state["generated_broll"] + [result]}
+
+# EXTENDED GRAPH
+graph = StateGraph(VideoGenState)
+
+# Original nodes
+graph.add_node("analyze", analysis_node)
+graph.add_node("thumbnail", thumbnail_node)
+graph.add_node("clip", clipping_node)
+
+# NEW generative video nodes
+graph.add_node("plan_broll", broll_planning_node)
+graph.add_node("gen_intro", intro_generation_node)
+graph.add_node("gen_broll", broll_sequence_node)
+graph.add_node("gen_outro", outro_generation_node)
+
+# ROUTING
+graph.set_entry_point("analyze")
+graph.add_edge("analyze", "plan_broll")
+graph.add_edge("plan_broll", "gen_intro")
+graph.add_edge("gen_intro", "gen_broll")
+graph.add_edge("gen_broll", "gen_outro")
+graph.add_edge("gen_outro", "thumbnail")
+graph.add_edge("thumbnail", "clip")
+graph.add_edge("clip", END)
+
+video_gen_agent = graph.compile()
+```
+
+---[ MODAL DEPLOYMENT CONFIGURATION ]---
+
+Add fal-client to the Modal image dependencies:
+
+```python
+image = (modal.Image.from_registry(
+    "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
+    .apt_install(["ffmpeg", "libgl1-mesa-glx", "wget", "libcudnn8", "git"])
+    .pip_install([
+        # Existing dependencies
+        "whisperx",
+        "torch==2.1.2",
+        "torchaudio==2.1.2",
+        "ffmpegcv",
+        "opencv-python",
+        "pysubs2",
+        "boto3",
+        "langchain",
+        "langgraph",
+        "langchain-openai",
+        # NEW: fal.ai client
+        "fal-client"
+    ])
+)
+
+# Environment secrets
+@app.function(
+    secrets=[
+        modal.Secret.from_name("gemini-secret"),
+        modal.Secret.from_name("aws-secrets"),
+        modal.Secret.from_name("fal-ai-secret"),  # NEW: FAL_API_KEY
+    ]
+)
+```
+
+---[ PROMPT ENGINEERING TEMPLATES ]---
+
+INTRO SCENE TEMPLATES:
+```
+[CINEMATIC HOOK]
+"Dynamic establishing shot with {theme_color} color grading, 
+camera slowly pushing in on {subject}, atmospheric lighting, 
+professional production quality, viral short format."
+
+[PODCAST ENERGY]
+"Energetic motion graphics environment, abstract shapes pulsing 
+to imaginary beat, {brand_colors} gradient background, 
+modern digital aesthetic, quick cuts suggestion."
+
+[STORY OPENER]
+"Mysterious silhouette of {character} against {backdrop}, 
+cinematic depth of field, anticipation building, 
+film grain texture, premium visual quality."
+```
+
+TRANSITION / B-ROLL TEMPLATES:
+```
+[TOPIC SHIFT]
+"Smooth morphing transition from {previous_topic_visual} to 
+{next_topic_visual}, seamless blend, maintaining color palette, 
+fluid camera movement, 3 second duration."
+
+[EMPHASIS MOMENT]
+"Dramatic zoom effect on {key_concept_visualization}, 
+impact frame at peak moment, brief pause, 
+high contrast lighting, attention-grabbing."
+
+[AMBIENT FILLER]
+"Abstract visualization of {concept}, subtle motion, 
+calming movement patterns, {brand_colors} palette, 
+loop-friendly composition."
+```
+
+OUTRO SCENE TEMPLATES:
+```
+[CALL TO ACTION]
+"Pull back reveal shot mirroring intro, {brand_element} subtle 
+appearance, satisfying conclusion feeling, subscribe/like 
+suggestion visual cue, premium finish."
+
+[LOOP PERFECT]
+"Final frame matching exactly first frame composition, 
+seamless loop capability, {subject} returns to starting 
+position, color grade matching intro."
+
+[CLIFF HANGER]
+"Dramatic moment frozen, {tease_element} partially visible, 
+'to be continued' tension, maintains visual style throughout, 
+hooks viewer for next clip."
+```
+
+---[ COST OPTIMIZATION STRATEGIES ]---
+
+1. BATCH PROCESSING: Queue multiple generations, process in bulk
+2. RESOLUTION TIERS: Use 480p for previews, 720p for final
+3. INFERENCE STEPS: 28 for drafts, 55 (pro_mode) for finals
+4. FRAME CACHING: Store and reuse anchor frames in S3
+5. SEED LIBRARY: Pre-generate seed batches for A/B testing
+
+ESTIMATED COSTS PER CLIP (fal.ai pricing as of 2024):
+- Standard quality (30 steps, 720p): ~$0.08-0.12
+- Pro mode (55 steps, 720p): ~$0.15-0.25
+- Image-to-video: ~$0.10-0.18
+
+---[ ERROR HANDLING & RETRY LOGIC ]---
+
+```python
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=60))
+def safe_video_generation(prompt: str, params: dict) -> dict:
+    """Robust video generation with exponential backoff."""
+    try:
+        result = fal.subscribe("fal-ai/hunyuan-video", arguments={
+            "prompt": prompt,
+            **params
+        })
+        return result
+    except Exception as e:
+        if "rate_limit" in str(e).lower():
+            time.sleep(30)
+        raise e
+```
+
+---[ QUALITY ASSURANCE CHECKLIST ]---
+
+□ Visual consistency score between clips ≥ 0.85 (SSIM metric)
+□ No jarring color shifts between scenes
+□ Character/subject continuity maintained
+□ Style tokens present in all prompts
+□ Seed values locked and logged
+□ Aspect ratio consistent across sequence
+□ Total generation time < 5min per clip set
+□ S3 anchor frames properly cached
+□ Error retry logic active
+□ Cost per generation logged
+
+---[ IMPLEMENTATION PRIORITY ]---
+
+PHASE 1 (MVP):
+1. Add fal-client to Modal image
+2. Implement ConsistentVideoGenerator class
+3. Create intro_generation_node
+4. Test seed-locked consistency
+
+PHASE 2 (INTEGRATION):
+1. Extend AgentState with video gen fields
+2. Add broll_planning_node with Gemini
+3. Implement full LangGraph extension
+4. Connect to existing clip pipeline
+
+PHASE 3 (OPTIMIZATION):
+1. Batch processing implementation
+2. Cost tracking integration
+3. Quality metrics automation
+4. A/B testing framework for seeds
+
+================================================================================
+   END OF META PROMPT | READY FOR DETAILED IMPLEMENTATION
+================================================================================

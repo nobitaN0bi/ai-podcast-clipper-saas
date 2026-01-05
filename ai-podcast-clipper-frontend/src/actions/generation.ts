@@ -17,15 +17,26 @@ export async function processVideo(uploadedFileId: string) {
       uploaded: true,
       id: true,
       userId: true,
+      status: true,
     },
   });
 
-  if (uploadedVideo.uploaded) return;
+  // Guard clause: Only allow processing if it's new, queued, or failed.
+  // Prevent double-processing if already running or done.
+  if (uploadedVideo.status === "processing" || uploadedVideo.status === "processed") {
+    console.log("⚠️ [Server Action] Skipped: Video is already", uploadedVideo.status);
+    return;
+  }
+
+  console.log("🚀 [Server Action] processVideo called for:", uploadedFileId);
+  console.log("DEBUG: Sending 'process-video-events' to Inngest...");
 
   await inngest.send({
     name: "process-video-events",
     data: { uploadedFileId: uploadedVideo.id, userId: uploadedVideo.userId },
   });
+
+  console.log("✅ [Server Action] Event sent!");
 
   await db.uploadedFile.update({
     where: {
